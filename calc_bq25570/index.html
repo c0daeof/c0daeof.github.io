@@ -1,0 +1,230 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>BQ25570 калькулятор резисторов</title>
+    <link rel="stylesheet" href="../styles.css">
+</head>
+<body>
+
+<div class="container">
+  <a href="/" class="back-btn">← Назад</a>
+  <h1>BQ25570 калькулятор резисторов</h1>
+
+  <p class="muted">BQ25570 использует внешние резистивные делители для задания следующих ключевых рабочих напряжений:</p>
+  <ul class="muted">
+    <li><strong>V_OUT</strong> — выходное напряжение понижающего преобразователя (вывод VOUT)</li>
+    <li><strong>VBAT_OV</strong> — программируемый порог перенапряжения накопителя. При достижении этого уровня boost-зарядник отключается, предотвращая перезаряд</li>
+    <li><strong>VBAT_OK</strong> и <strong>VBAT_OK_HYST</strong> — два порога для цифрового флага VBAT_OK (Battery Good). Формируют гистерезис, устраняя дребезг сигнала при флуктуациях напряжения накопителя</li>
+  </ul>
+  <p class="muted">Данный калькулятор принимает целевые значения напряжений и выполняет подбор номиналов резисторов из стандартного ряда E24, с последующим пересчётом и проверкой фактических значений порогов.</p>
+
+  <form id="calcForm">
+    <div class="inputs">
+      <div class="field">
+        <label for="u1">VBAT_OV (В)</label>
+        <input id="u1" type="number" step="0.01" min="2.2" max="5.5" value="4.2">
+      </div>
+
+      <div class="field">
+        <label for="u2">V_OUT (В)</label>
+        <input id="u2" type="number" step="0.01" min="1.3" max="5.0" value="1.8">
+      </div>
+
+      <div class="field">
+        <label for="u3">V_OK (V)</label>
+        <input id="u3" type="number" step="0.01" min="1.9" max="5.5" value="2.7">
+      </div>
+
+      <div class="field">
+        <label for="u4">V_OK_HYST (V)</label>
+        <input id="u4" type="number" step="0.01" min="1.9" max="5.5" value="3.5">
+      </div>
+    </div>
+  </form>
+
+  <div id="result" class="result"></div>
+  <p class="muted">Расположение настроечных резисторов на <a href="https://aliexpress.ru/wholesale?SearchText=CJMCU-2557&SortType=total_tranpro_desc" target="_blank">популярной плате CJMCU-2557</a> с чипом BQ25570</p>
+
+  <div class="image-wrapper">
+    <img id="boardImage" src="CJMCU_2557_resistors_map.jpg" alt="CJMCU-2557 resistors map">
+  </div>
+
+  <!-- modal -->
+  <div id="imgModal" class="img-modal">
+    <img id="imgModalContent">
+  </div>
+</div>
+
+<script>
+const V_BIAS = 1.21;
+const MAX_SUM = 12.0;
+const TOLERANCE = 0.05;
+const E24_BASE = [1.0, 1.1, 1.2, 1.3, 1.5, 1.6, 1.8, 2.0, 2.2, 2.4, 2.7, 3.0, 3.3, 3.6, 3.9, 4.3, 4.7, 5.1, 5.6, 6.2, 6.8, 7.5, 8.2, 9.1];
+
+const inputs = document.querySelectorAll('.inputs input');
+const resultDiv = document.getElementById('result');
+
+function calcVout(R1, R2) { return V_BIAS * (1 + R2 / R1); }
+function calcVbatOv(R1, R2) { return V_BIAS * (1 + R2 / R1) * 1.5; }
+function calcVbatOk(R1, R2, R3) 
+{
+  const vmin = V_BIAS * (1 + R2 / R1);
+  const vmax = V_BIAS * ((R1 + R2 + R3) / R1);
+  return { vmin, vmax };
+}
+
+function findBestResistors2(target, formula, maxSum = MAX_SUM) {
+  let bestError = Infinity;
+  let candidates = [];
+
+  for (const R1 of E24_BASE) {
+    for (const R2 of E24_BASE) {
+      const sum = R1 + R2;
+      if (sum > maxSum) continue;
+      const calculated = formula(R1, R2);
+      const error = Math.abs(calculated - target);
+      if (error < bestError) {
+        bestError = error;
+      }
+      candidates.push({ R1, R2, sum, error });
+    }
+  }
+
+  const bestCandidates = candidates.filter(c => c.error <= bestError * (1 + TOLERANCE));
+  bestCandidates.sort((a, b) => b.sum - a.sum);
+  const best = bestCandidates[0];
+  return best ? [best.R1, best.R2] : null;
+}
+
+function findBestResistors3(targetMin, targetMax, maxSum = MAX_SUM) {
+  const R3options = [...E24_BASE, ...E24_BASE.map(v => v / 10.0)];
+  let bestError = Infinity;
+  let candidates = [];
+
+  for (const R1 of E24_BASE) {
+    for (const R2 of E24_BASE) {
+      for (const R3 of R3options) {
+        const sum = R1 + R2 + R3;
+        if (sum > maxSum) continue;
+        const { vmin, vmax } = calcVbatOk(R1, R2, R3);
+        const errMin = Math.abs(vmin - targetMin) / targetMin;
+        const errMax = Math.abs(vmax - targetMax) / targetMax;
+        const error = Math.max(errMin, errMax);
+        if (error < bestError) {
+          bestError = error;
+        }
+        candidates.push({ R1, R2, R3, sum, error });
+      }
+    }
+  }
+
+  if (bestError === Infinity) return null;
+
+  const bestCandidates = candidates.filter(c => c.error <= bestError * (1 + TOLERANCE));
+  bestCandidates.sort((a, b) => b.sum - a.sum);
+  const best = bestCandidates[0];
+  return best ? [best.R1, best.R2, best.R3] : null;
+}
+
+
+function formatResistor(value)
+{
+  const rounded = Math.round(value * 1e6) / 1e6;
+  
+  if (rounded < 1)
+  {
+    let kohm = rounded * 1000;
+    if (Math.abs(kohm - Math.round(kohm)) < 0.01)
+    {
+      return Math.round(kohm) + " кОм";
+    }
+    else
+    {
+      return kohm.toFixed(2) + " кОм";
+    }
+  }
+  else
+  {
+    const mohm = parseFloat(rounded.toFixed(3));
+    return mohm + " МОм";
+  }
+}
+
+
+function calculate()
+{
+  const values = Array.from(inputs).map(i => parseFloat(i.value));
+  if (values.some(v => isNaN(v)))
+  {
+    resultDiv.innerHTML = '<span class="muted">Некоторые значения напряжений не являются числом</span>';
+    return;
+  }
+
+  const [VBAT_OV_target, VOUT_target, V_OK_MIN_target, V_OK_MAX_target] = values;
+
+  const ovRes = findBestResistors2(VBAT_OV_target, calcVbatOv);
+  const voutRes = findBestResistors2(VOUT_target, calcVout);
+  const okRes = findBestResistors3(V_OK_MIN_target, V_OK_MAX_target);
+
+  if (!ovRes || !voutRes || !okRes)
+  {
+    resultDiv.innerHTML = '<span class="muted">Не удалось подобрать резисторы.</span>';
+    return;
+  }
+
+  const actualOv = calcVbatOv(ovRes[0], ovRes[1]);
+  const actualVout = calcVout(voutRes[0], voutRes[1]);
+  const actualOk = calcVbatOk(okRes[0], okRes[1], okRes[2]);
+
+  resultDiv.innerHTML = `
+    <h2>Результат подбора резисторов ряда E24</h2>
+    <table class="result-table">
+      <thead>
+        <tr><th>&nbsp;</th><th>Требуемое, В</th><th>Фактическое, В</th><th>Погрешность</th></tr>
+      </thead>
+      <tbody>
+        <tr><td>VBAT_OV</td><td>${VBAT_OV_target.toFixed(3)}</td><td>${actualOv.toFixed(3)}</td><td>${((actualOv - VBAT_OV_target)/VBAT_OV_target*100).toFixed(2)}%</td></tr>
+        <tr><td>V_OUT</td><td>${VOUT_target.toFixed(3)}</td><td>${actualVout.toFixed(3)}</td><td>${((actualVout - VOUT_target)/VOUT_target*100).toFixed(2)}%</td></tr>
+        <tr><td>V_OK</td><td>${V_OK_MIN_target.toFixed(3)}</td><td>${actualOk.vmin.toFixed(3)}</td><td>${((actualOk.vmin - V_OK_MIN_target)/V_OK_MIN_target*100).toFixed(2)}%</td></tr>
+        <tr><td>V_OK_HYST</td><td>${V_OK_MAX_target.toFixed(3)}</td><td>${actualOk.vmax.toFixed(3)}</td><td>${((actualOk.vmax - V_OK_MAX_target)/V_OK_MAX_target*100).toFixed(2)}%</td></tr>
+      </tbody>
+    </table>
+    <h3>Номиналы резисторов (ряд E24):</h3>
+    <ul>
+      <li><strong>R_OV1</strong> = ${formatResistor(ovRes[0])}</li>
+      <li><strong>R_OV2</strong> = ${formatResistor(ovRes[1])}</li>
+      <li><strong>R_OUT1</strong> = ${formatResistor(voutRes[0])}</li>
+      <li><strong>R_OUT2</strong> = ${formatResistor(voutRes[1])}</li>
+      <li><strong>R_OK1</strong> = ${formatResistor(okRes[0])}</li>
+      <li><strong>R_OK2</strong> = ${formatResistor(okRes[1])}</li>
+      <li><strong>R_OK3</strong> = ${formatResistor(okRes[2])}</li>
+    </ul>`;
+}
+
+inputs.forEach(input => {
+  input.addEventListener('input', calculate);
+  input.addEventListener('wheel', (e) => {
+    e.preventDefault();
+    const step = parseFloat(input.step) || 0.1;
+    const current = parseFloat(input.value) || 0;
+    const min = parseFloat(input.min) !== undefined ? parseFloat(input.min) : -Infinity;
+    const max = parseFloat(input.max) !== undefined ? parseFloat(input.max) : Infinity;
+    const direction = e.deltaY < 0 ? 1 : -1;
+
+    let newValue = current + direction * step;
+    newValue = Math.min(max, Math.max(min, newValue));
+    newValue = Math.round(newValue * 100) / 100;
+    input.value = newValue;
+    calculate();
+  });
+});
+
+calculate();
+</script>
+
+<script src="../js/image-modal.js"></script>
+
+</body>
+</html>
