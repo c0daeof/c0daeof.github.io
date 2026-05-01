@@ -182,13 +182,13 @@ function calculate()
     <h2>Результат подбора резисторов ряда E24</h2>
     <table class="result-table">
       <thead>
-        <tr><th>&nbsp;</th><th>Требуемое, В</th><th>Фактическое, В</th><th>Погрешность</th></tr>
+        <tr><th>&nbsp;</th><th>Требуемое, В</th><th>Фактическое, В</th></tr>
       </thead>
       <tbody>
-        <tr><td>VBAT_OV</td><td>${VBAT_OV_target.toFixed(3)}</td><td>${actualOv.toFixed(3)}</td><td>${((actualOv - VBAT_OV_target)/VBAT_OV_target*100).toFixed(2)}%</td></tr>
-        <tr><td>V_OUT</td><td>${VOUT_target.toFixed(3)}</td><td>${actualVout.toFixed(3)}</td><td>${((actualVout - VOUT_target)/VOUT_target*100).toFixed(2)}%</td></tr>
-        <tr><td>V_OK</td><td>${V_OK_MIN_target.toFixed(3)}</td><td>${actualOk.vmin.toFixed(3)}</td><td>${((actualOk.vmin - V_OK_MIN_target)/V_OK_MIN_target*100).toFixed(2)}%</td></tr>
-        <tr><td>V_OK_HYST</td><td>${V_OK_MAX_target.toFixed(3)}</td><td>${actualOk.vmax.toFixed(3)}</td><td>${((actualOk.vmax - V_OK_MAX_target)/V_OK_MAX_target*100).toFixed(2)}%</td></tr>
+        <tr><td>VBAT_OV</td><td>${VBAT_OV_target.toFixed(3)}</td><td>${actualOv.toFixed(3)}</td></tr>
+        <tr><td>V_OUT</td><td>${VOUT_target.toFixed(3)}</td><td>${actualVout.toFixed(3)}</td></tr>
+        <tr><td>V_OK</td><td>${V_OK_MIN_target.toFixed(3)}</td><td>${actualOk.vmin.toFixed(3)}</td></tr>
+        <tr><td>V_OK_HYST</td><td>${V_OK_MAX_target.toFixed(3)}</td><td>${actualOk.vmax.toFixed(3)}</td></tr>
       </tbody>
     </table>
     <h3>Номиналы резисторов (ряд E24):</h3>
