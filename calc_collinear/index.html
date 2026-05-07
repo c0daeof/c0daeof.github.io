@@ -1,0 +1,109 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Калькулятор коллинеарной антенны</title>
+    <link rel="stylesheet" href="../styles.css">
+</head>
+<body>
+
+<div class="container">
+  <a href="../index.html" class="back-btn">← Назад</a>
+  <h1>Калькулятор коллинеарной антенны из кабеля</h1>
+
+  <p class="muted">Антенна собрана из одинаковых отрезков коаксиального кабеля, соединённых последовательно по схеме «жила–оплётка».</p>
+  <p class="muted">Каждый участок оплётки фактически работает как отдельный излучающий / принимающий элемент. В результате все сегменты работают совместно, складываясь и обеспечивая усиление антенны.</p>
+
+  <form id="calcForm">
+    <div class="inputs3">
+      <div class="field">
+        <label for="freq">Частота (МГц)</label>
+        <input id="freq" type="number" step="0.01" min="1" max="1000" value="868">
+      </div>
+
+      <div class="field">
+        <label for="u2">Velocity factor кабеля</label>
+        <input id="u2" type="number" step="0.001" min="0.1" max="1.0" value="0.66">
+      </div>
+
+      <div class="field">
+        <label for="u3">Velocity factor трубки</label>
+        <input id="u3" type="number" step="0.001" min="0.1" max="1.0" value="0.95">
+      </div>
+    </div>
+  </form>
+
+  <div id="result" class="result"></div>
+
+  <!-- modal -->
+  <div id="imgModal" class="img-modal">
+    <img id="imgModalContent">
+  </div>
+</div>
+
+<script>
+const inputs = document.querySelectorAll('.inputs3 input');
+const resultDiv = document.getElementById('result');
+const LIGHT_SPEED = 299792458;
+const MHZ = 1000000;
+const MM = 1000;
+const SOLDER_SIZE = 10; // mm
+
+function calculate()
+{
+  const values = Array.from(inputs).map(i => parseFloat(i.value));
+  if (values.some(v => isNaN(v)))
+  {
+    resultDiv.innerHTML = '<span class="muted">Некоторые значения не являются числом</span>';
+    return;
+  }
+
+  const [frequency, vf_cable, vf_tube] = values;
+
+  let Lr = LIGHT_SPEED / (frequency * MHZ) / 2.0 * vf_cable * MM;
+  let Lr_r = Lr + SOLDER_SIZE;
+  let Ls = LIGHT_SPEED / (frequency * MHZ) / 4.0 * MM;
+  let Lb = Ls * vf_tube;
+
+  resultDiv.innerHTML = `
+    <h2>Расчётные размеры элементов антенны</h2>
+    <table class="result-table table-min">
+      <thead>
+        <tr><th>Элемент</th><th>Длина</th></tr>
+      </thead>
+      <tbody>
+        <tr><td>Излучающая часть</td><td>${Lr.toFixed(2)} мм</td></tr>
+        <tr><td>Отрезок кабеля</td><td>${Lr_r.toFixed(2)} мм</td></tr>
+        <tr><td>Штырь</td><td>${Ls.toFixed(2)} мм</td></tr>
+        <tr><td>Трубка-балун</td><td>${Lb.toFixed(2)} мм</td></tr>
+      </tbody>
+    </table>`;
+}
+
+
+inputs.forEach(input => {
+  input.addEventListener('input', calculate);
+  input.addEventListener('wheel', (e) => {
+    e.preventDefault();
+    const step = parseFloat(input.getAttribute('step')) || 0.001;
+    const stepStr = step.toString();
+    const decimals = stepStr.includes('.') ? stepStr.split('.')[1].length : 0;
+    const current = parseFloat(input.value) || 0;
+    const min = parseFloat(input.min) || -Infinity;
+    const max = parseFloat(input.max) || Infinity;
+    const direction = e.deltaY < 0 ? 1 : -1;
+    let newValue = current + direction * step;
+    newValue = Math.min(max, Math.max(min, newValue));
+    input.value = newValue.toFixed(decimals);
+    calculate();
+  });
+});
+
+calculate();
+</script>
+
+<script src="../js/image-modal.js"></script>
+
+</body>
+</html>
